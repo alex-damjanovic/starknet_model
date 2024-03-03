@@ -1,0 +1,4 @@
+
+class STRK (float):
+    pass
+
