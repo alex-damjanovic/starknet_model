@@ -111,7 +111,7 @@ def simulate(system_parameters,
 
 
 st.sidebar.header('System Parameter Configuration')
-suppl_expander = st.sidebar.expander('Total Supply', expanded=False)
+suppl_expander = st.sidebar.expander('Total Supply & TGE Date', expanded=False)
 with suppl_expander:
     starting_date = st.date_input("Starting Date",
                                   value=pd.to_datetime("2024-01-01"))
@@ -297,13 +297,10 @@ if st.button('Run Simulation'):
     elif upper_bound <= lower_bound:
         st.error('Error: The upper bound must be higher than the lower bound.')
     else:
-        print("Staking rate before simulation:",
-              st.session_state.get('staking_rate', 'Not generated'))
+       
         df = simulate(system_parameters,
                       total_supply=total_supply,
                       multiplier=multiplier)
-        print("Staking rate after simulation:",
-              st.session_state.get('staking_rate', 'Not generated'))
 
         col1, col2 = st.columns(2)
 
