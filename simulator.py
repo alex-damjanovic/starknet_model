@@ -352,13 +352,15 @@ if st.button('Run Simulation'):
                 df,
                 x='date',
                 y=['unlocked_supply', 'total_staked'],
-                title='Tokenomics Supply Over Time - Vested Supply')
+                )
             fig_line1.update_layout(
                 title={
-                    'text': 'Tokenomics Supply Over Time - Total Supply',
+                    'text': 'STRK Supply Over Time - Unlocks + Inflation',
                     'x': 0.5,
                     'xanchor': 'center'
-                })
+                },
+                width = 600,
+                height = 450)
             st.plotly_chart(fig_line1)
 
         with col4:
