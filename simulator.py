@@ -15,8 +15,26 @@ from model.initial_variables import setup_initial_state
 
 st.set_page_config(layout="wide")
 
+# Display an image with the center class applied
+col00, col01, col02 = st.columns([1, 2, 1])
 
-def simulate(system_parameters, timesteps=5 * 52, runs=1):
+with col00:
+    st.write("")  
+
+with col01:
+    
+    st.image("images/logo2.svg", use_column_width=True)
+
+with col02:
+    st.write("")
+
+
+def simulate(system_parameters,
+             timesteps=5 * 52,
+             runs=1,
+             start_date=pd.to_datetime("2024-01-01"),
+             total_supply=1_000_000_000,
+             multiplier=0.4):
     entity_names = [
         entity['name'] for entity in system_parameters['entities'][0]
     ]
@@ -37,12 +55,67 @@ def simulate(system_parameters, timesteps=5 * 52, runs=1):
     experiment.engine = Engine(backend=Backend.PATHOS)
 
     results = experiment.run()
-    return pd.DataFrame(results)
+    df = pd.DataFrame(results)
+    df['date'] = [
+        start_date + pd.Timedelta(weeks=wk) for wk in range(timesteps + 1)
+    ]
+
+    # Check if a staking rate has been generated and stored in the session state
+    if 'staking_rate' in st.session_state:
+        df['percentage_staked'] = st.session_state['staking_rate'][:len(df)]
+
+    else:
+        st.error(
+            "Staking rate not generated. Please generate staking rate in the Staking Parameters before running the simulation."
+        )
+        return pd.DataFrame(
+        )  # Return an empty DataFrame to prevent further execution
+
+    # Apply the balance to each entity column
+    for entity in system_parameters['entities'][0]:
+        df[entity['name']] = df[entity['name']].apply(lambda x: x.balance)
+
+    df['unlocked_supply'] = df[[
+        entity['name'] for entity in system_parameters['entities'][0]
+    ]].sum(axis=1)
+    df['total_supply'] = total_supply  # Assuming total_supply is defined elsewhere
+    df['weekly_inflation'] = 0
+
+    df['weekly_inflation_percent'] = 0
+    df['annual_inflation_percent'] = 0
+
+    df['total_staked'] = (df['percentage_staked'] /
+                          100) * df['unlocked_supply']
+
+    for t in range(len(df)):
+        staking_rate = df.loc[t, 'percentage_staked']  # S in the formula
+        annual_minting_rate = multiplier * np.sqrt(
+            staking_rate)  # M = 0.4 * sqrt(S)
+        weekly_minting_rate = annual_minting_rate / 52  # Convert annual minting rate to weekly
+
+        df.loc[t, 'annual_inflation_percent'] = annual_minting_rate
+        df.loc[t, 'weekly_inflation_percent'] = weekly_minting_rate
+
+        weekly_inflation_tokens = (weekly_minting_rate /
+                                   100) * df.loc[t, 'total_supply']
+        df.loc[t, 'weekly_inflation'] = weekly_inflation_tokens
+
+        if t > 0:
+            df.loc[t, 'total_supply'] = df.loc[t - 1, 'total_supply'] + df.loc[
+                t, 'weekly_inflation']
+        else:
+            
+            df.loc[t, 'total_supply'] += weekly_inflation_tokens
+
+    return df
 
 
 st.sidebar.header('System Parameter Configuration')
 suppl_expander = st.sidebar.expander('Total Supply', expanded=False)
-total_supply = suppl_expander.number_input('Total Supply',
+with suppl_expander:
+    starting_date = st.date_input("Starting Date",
+                                  value=pd.to_datetime("2024-01-01"))
+total_supply = suppl_expander.number_input('Total Supply (to be vested)',
                                            value=1_000_000_000,
                                            step=1000)
 
@@ -53,7 +126,7 @@ base_mu = staking_expander.number_input('Base Mu (Mean of Drift)',
 sigma = staking_expander.number_input(
     'Sigma (Standard Deviation of Drift)',
     value=0.5,
-    step=0.01,
+    step=0.10,
     help=
     "Sigma controls the volatility of the staking percentage's change over time. A higher sigma results in more significant fluctuations."
 )
@@ -61,6 +134,37 @@ lower_bound = staking_expander.number_input(
     'Lower Bound of Target Percentage Staked', value=20.0, step=1.0)
 upper_bound = staking_expander.number_input(
     'Upper Bound of Target Percentage Staked', value=60.0, step=1.0)
+
+if staking_expander.button('Generate Staking Rate'):
+    time_steps = 5 * 52 + 1  # Assuming 5 years of weekly data points, adjust as necessary
+    base_line = np.linspace(lower_bound, upper_bound,
+                            num=time_steps)  # Base linear progression
+    random_fluctuations = np.random.normal(
+        loc=0, scale=sigma, size=time_steps)  # Generate random fluctuations
+
+    # Apply dynamic adjustments to the base line to simulate realistic staking percentage fluctuations
+    staking_rate_with_fluctuations = []
+    for t in range(time_steps):
+        if t == 0:
+            staking_rate_with_fluctuations.append(base_line[t])
+        else:
+            adjusted_mu = base_mu
+            if base_line[t - 1] < lower_bound:
+                adjusted_mu = base_mu * (
+                    1 + (lower_bound - base_line[t - 1]) / lower_bound)
+            elif base_line[t - 1] > upper_bound:
+                adjusted_mu = -base_mu * (base_line[t - 1] -
+                                          upper_bound) / upper_bound
+
+            new_value = base_line[t] + adjusted_mu + random_fluctuations[t]
+            new_value = max(0,
+                            min(100,
+                                new_value))  # Ensure it remains within 0-100%
+            staking_rate_with_fluctuations.append(new_value)
+
+   
+    st.session_state['staking_rate'] = staking_rate_with_fluctuations
+    st.sidebar.success('Staking rate generated!')
 
 inflation_parameter = st.sidebar.expander('Inflation Coefficient',
                                           expanded=False)
@@ -91,7 +195,7 @@ if lower_bound >= upper_bound:
     st.sidebar.error(
         'Error: The upper bound must be higher than the lower bound.')
 
-entities_expander = st.sidebar.expander('Entities Configuration',
+entities_expander = st.sidebar.expander('Allocation Configuration',
                                         expanded=False)
 entities_data = []
 total_percentage = 0
@@ -182,7 +286,7 @@ system_parameters = {
     'entities': [entities_data]
 }
 
-# Main area for running simulation and visualization
+
 st.markdown("<h1 style='text-align: center;'>Starknet Vesting Simulator</h1>",
             unsafe_allow_html=True)
 
@@ -193,95 +297,39 @@ if st.button('Run Simulation'):
     elif upper_bound <= lower_bound:
         st.error('Error: The upper bound must be higher than the lower bound.')
     else:
-        df = simulate(system_parameters)
-
-        # Process DataFrame for visualization
-        for entity in system_parameters['entities'][0]:
-            df[entity['name']] = df[entity['name']].apply(lambda x: x.balance)
-
-        df['unlocked_supply'] = 0
-        df['total_supply'] = 1_000_000_000
-        df['weekly_inflation'] = 0
-        df['weekly_inflation_percent'] = 0
-        df['annual_inflation_percent'] = 0
-
-        for entity in system_parameters['entities'][0]:
-            # Add each entity's balance to the unlocked_supply column
-            df['unlocked_supply'] += df[entity['name']]
-
-        # Validate bounds
-
-        time_steps = len(df)
-
-        # Generate random fluctuations (stochastic term)
-        random_fluctuations = np.random.normal(loc=0,
-                                               scale=sigma,
-                                               size=time_steps)
-
-        # Initialize 'percentage_staked' with a value within your target range to start
-        df['percentage_staked'] = np.linspace(lower_bound,
-                                              upper_bound,
-                                              num=time_steps)
-
-        # Loop through each time step to calculate the percentage staked
-        for t in range(1, time_steps):
-            # Dynamically adjust mu based on the current percentage staked
-            if df.loc[t - 1, 'percentage_staked'] < lower_bound:
-                adjusted_mu = base_mu * (
-                    1 + (lower_bound - df.loc[t - 1, 'percentage_staked']) /
-                    lower_bound)
-            elif df.loc[t - 1, 'percentage_staked'] > upper_bound:
-                adjusted_mu = -base_mu * (df.loc[t - 1, 'percentage_staked'] -
-                                          upper_bound) / upper_bound
-            else:
-                adjusted_mu = base_mu
-
-            # Calculate the new value for percentage staked
-            new_value = df.loc[
-                t - 1,
-                'percentage_staked'] + adjusted_mu + random_fluctuations[t]
-            new_value = max(0, min(
-                100, new_value))  # Ensure it remains within realistic bounds
-
-            # Update the 'percentage_staked' column with the new value
-            df.loc[t, 'percentage_staked'] = new_value
-
-        df['total_staked'] = (df['percentage_staked'] /
-                              100) * df['unlocked_supply']
-
-        for t in range(time_steps):
-            staking_rate = df.loc[t, 'percentage_staked']  # S in the formula
-            annual_minting_rate = 0.4 * np.sqrt(
-                staking_rate)  # M = 0.4 * sqrt(S)
-            weekly_minting_rate = annual_minting_rate / 52  # Convert annual minting rate to weekly
-
-            df.loc[t, 'annual_inflation_percent'] = annual_minting_rate
-            df.loc[t, 'weekly_inflation_percent'] = weekly_minting_rate
-
-            weekly_inflation_tokens = (weekly_minting_rate / 100) * df.loc[
-                t, 'total_supply']  # Calculate number of tokens minted weekly
-            df.loc[
-                t,
-                'weekly_inflation'] = weekly_inflation_tokens  # Update the weekly inflation column
-
-            if t > 0:  # Update total supply from second row onwards
-                df.loc[
-                    t,
-                    'total_supply'] = df.loc[t - 1, 'total_supply'] + df.loc[
-                        t - 1, 'weekly_inflation']  # Update total supply
+        print("Staking rate before simulation:",
+              st.session_state.get('staking_rate', 'Not generated'))
+        df = simulate(system_parameters,
+                      total_supply=total_supply,
+                      multiplier=multiplier)
+        print("Staking rate after simulation:",
+              st.session_state.get('staking_rate', 'Not generated'))
 
         col1, col2 = st.columns(2)
 
         with col1:
+            
+            df['inflation_tokens'] = df['weekly_inflation'].cumsum()
+            df['unlocked_supply'] = df['unlocked_supply'] + df[
+                'inflation_tokens']
 
             fig_area = px.area(
                 df,
-                x='timestep',
+                x='date',
                 y=[
                     entity['name']
                     for entity in system_parameters['entities'][0]
-                ],
+                ] +
+                ['inflation_tokens'
+                 ],  
                 title='Tokenomics Supply Over Time')
+            fig_area.update_layout(
+                title={
+                    'text': 'Tokenomics Supply Over Time',
+                    'x': 0.5,  
+                    'xanchor': 'center'
+                })
+
             st.plotly_chart(fig_area, use_container_width=True)
 
         with col2:
@@ -291,47 +339,50 @@ if st.button('Run Simulation'):
                              values='percentage_of_total_supply',
                              names='name',
                              title='Percentage Distribution of Total Supply')
-            # No need to set autosize=True here since use_container_width=True will handle responsiveness
+            fig_pie.update_layout(
+                title={
+                    'text': 'Percentage Distribution of Total Supply',
+                    'x': 0.5,  
+                    'xanchor': 'center'
+                })
+
             st.plotly_chart(fig_pie, use_container_width=True)
 
         col3, col4 = st.columns(2)
 
         with col3:
-            fig_line = px.line(
-                df,
-                x='timestep',
-                y=[
-                    entity['name']
-                    for entity in system_parameters['entities'][0]
-                ],
-                title='Tokenomics Supply Over Time - Line Chart')
-            fig_line.update_layout(
-                width=600, height=450
-            )  # Example width and height, adjust according to your needs
-            st.plotly_chart(fig_line, use_container_width=False)
-
-        with col4:
             fig_line1 = px.line(
                 df,
-                x='timestep',
+                x='date',
                 y=['unlocked_supply', 'total_staked'],
-                title='Tokenomics Supply Over Time - Total Supply')
+                title='Tokenomics Supply Over Time - Vested Supply')
+            fig_line1.update_layout(
+                title={
+                    'text': 'Tokenomics Supply Over Time - Total Supply',
+                    'x': 0.5,
+                    'xanchor': 'center'
+                })
             st.plotly_chart(fig_line1)
 
-        col5, col6 = st.columns(2)
-
-        with col5:
+        with col4:
             fig_line2 = px.line(df,
-                                x='timestep',
+                                x='date',
                                 y='percentage_staked',
                                 title='Staked over time')
+            fig_line2.update_layout(title={
+                'text': ' % Staked  over time',
+                'x': 0.5,
+                'xanchor': 'center'
+            })
             st.plotly_chart(fig_line2)
 
-        with col6:
+        col5, _ = st.columns(2)
+
+        with col5:
             fig = go.Figure()
             fig.add_trace(
                 go.Scatter(
-                    x=df['timestep'],
+                    x=df['date'],
                     y=df['annual_inflation_percent'],
                     mode='lines',
                     name='Annual Inflation Percent',
@@ -340,22 +391,20 @@ if st.button('Run Simulation'):
                                   f"Staking Rate: {row['percentage_staked']}%",
                                   axis=1)))
 
-            # Update layout to add title and adjust other settings as needed
+            
             fig.update_layout(
-                title='Annual Inflation Percent Over Time',
+                title={
+                    'text': 'Annual Inflation Percent Over Time',
+                    'x': 0.5,
+                    'xanchor': 'center'
+                },
                 xaxis_title='Timestep',
                 yaxis_title='Annual Inflation %',
                 hovermode='closest'
-            )  # 'closest' shows the tooltip for the closest point
+            )  
 
-            # Show the figure
+            
             st.plotly_chart(fig)
-
-        fig_line3 = px.line(df,
-                            x='timestep',
-                            y='total_supply',
-                            title='Total_supply over time')
-        st.plotly_chart(fig_line3)
 
         def convert_df_to_csv(df):
             return df.to_csv(index=False).encode('utf-8')
