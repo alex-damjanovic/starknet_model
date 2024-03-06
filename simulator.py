@@ -10,7 +10,6 @@ from model.classes import Entity
 from model.logic import generate_dynamic_functions
 
 from model.system_parameters import system_parameters as default_system_parameters
-#from model.state_update_blocks import state_update_blocks
 from model.initial_variables import setup_initial_state
 
 st.set_page_config(layout="wide")
@@ -57,7 +56,7 @@ def simulate(system_parameters,
     results = experiment.run()
     df = pd.DataFrame(results)
     df['date'] = [
-        start_date + pd.Timedelta(weeks=wk) for wk in range(timesteps + 1)
+        starting_date + pd.Timedelta(weeks=wk) for wk in range(timesteps + 1)
     ]
 
     # Check if a staking rate has been generated and stored in the session state
@@ -136,7 +135,7 @@ upper_bound = staking_expander.number_input(
     'Upper Bound of Target Percentage Staked', value=60.0, step=1.0)
 
 if staking_expander.button('Generate Staking Rate'):
-    time_steps = 5 * 52 + 1  # Assuming 5 years of weekly data points, adjust as necessary
+    time_steps = 5 * 52 + 1 
     base_line = np.linspace(lower_bound, upper_bound,
                             num=time_steps)  # Base linear progression
     random_fluctuations = np.random.normal(
