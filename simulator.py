@@ -65,7 +65,7 @@ def simulate(system_parameters,
 
     else:
         st.error(
-            "Staking rate not generated. Please generate staking rate in the Staking Parameters before running the simulation."
+            "Staking rate not generated. Please generate the staking rate first."
         )
         return pd.DataFrame(
         )  # Return an empty DataFrame to prevent further execution
@@ -134,36 +134,6 @@ lower_bound = staking_expander.number_input(
 upper_bound = staking_expander.number_input(
     'Upper Bound of Target Percentage Staked', value=60.0, step=1.0)
 
-if staking_expander.button('Generate Staking Rate'):
-    time_steps = 5 * 52 + 1 
-    base_line = np.linspace(lower_bound, upper_bound,
-                            num=time_steps)  # Base linear progression
-    random_fluctuations = np.random.normal(
-        loc=0, scale=sigma, size=time_steps)  # Generate random fluctuations
-
-    # Apply dynamic adjustments to the base line to simulate realistic staking percentage fluctuations
-    staking_rate_with_fluctuations = []
-    for t in range(time_steps):
-        if t == 0:
-            staking_rate_with_fluctuations.append(base_line[t])
-        else:
-            adjusted_mu = base_mu
-            if base_line[t - 1] < lower_bound:
-                adjusted_mu = base_mu * (
-                    1 + (lower_bound - base_line[t - 1]) / lower_bound)
-            elif base_line[t - 1] > upper_bound:
-                adjusted_mu = -base_mu * (base_line[t - 1] -
-                                          upper_bound) / upper_bound
-
-            new_value = base_line[t] + adjusted_mu + random_fluctuations[t]
-            new_value = max(0,
-                            min(100,
-                                new_value))  # Ensure it remains within 0-100%
-            staking_rate_with_fluctuations.append(new_value)
-
-   
-    st.session_state['staking_rate'] = staking_rate_with_fluctuations
-    st.sidebar.success('Staking rate generated!')
 
 inflation_parameter = st.sidebar.expander('Inflation Coefficient',
                                           expanded=False)
@@ -288,6 +258,37 @@ system_parameters = {
 
 st.markdown("<h1 style='text-align: center;'>Starknet Vesting Simulator</h1>",
             unsafe_allow_html=True)
+
+if st.button('Generate Staking Rate'):
+    time_steps = 5 * 52 + 1 
+    base_line = np.linspace(lower_bound, upper_bound,
+                            num=time_steps)  # Base linear progression
+    random_fluctuations = np.random.normal(
+        loc=0, scale=sigma, size=time_steps)  # Generate random fluctuations
+
+    # Apply dynamic adjustments to the base line to simulate realistic staking percentage fluctuations
+    staking_rate_with_fluctuations = []
+    for t in range(time_steps):
+        if t == 0:
+            staking_rate_with_fluctuations.append(base_line[t])
+        else:
+            adjusted_mu = base_mu
+            if base_line[t - 1] < lower_bound:
+                adjusted_mu = base_mu * (
+                    1 + (lower_bound - base_line[t - 1]) / lower_bound)
+            elif base_line[t - 1] > upper_bound:
+                adjusted_mu = -base_mu * (base_line[t - 1] -
+                                          upper_bound) / upper_bound
+
+            new_value = base_line[t] + adjusted_mu + random_fluctuations[t]
+            new_value = max(0,
+                            min(100,
+                                new_value)) 
+            staking_rate_with_fluctuations.append(new_value)
+
+   
+    st.session_state['staking_rate'] = staking_rate_with_fluctuations
+    st.success('Staking rate generated!')
 
 if st.button('Run Simulation'):
     if total_percentage != 100.0:
