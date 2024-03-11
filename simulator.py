@@ -51,7 +51,7 @@ def simulate(system_parameters,
                   params=system_parameters)
     simulation = Simulation(model=model, timesteps=timesteps, runs=runs)
     experiment = Experiment([simulation])
-    experiment.engine = Engine(backend=Backend.PATHOS)
+    #experiment.engine = Engine(backend=Backend.PATHOS)
 
     results = experiment.run()
     df = pd.DataFrame(results)
@@ -288,7 +288,7 @@ if st.button('Generate Staking Rate'):
 
    
     st.session_state['staking_rate'] = staking_rate_with_fluctuations
-    st.success('Staking rate generated!')
+    st.success('Staking rate generated! You can run the simulation now.')
 
 if st.button('Run Simulation'):
     if total_percentage != 100.0:
@@ -297,121 +297,123 @@ if st.button('Run Simulation'):
     elif upper_bound <= lower_bound:
         st.error('Error: The upper bound must be higher than the lower bound.')
     else:
-       
-        df = simulate(system_parameters,
-                      total_supply=total_supply,
-                      multiplier=multiplier)
+        with st.spinner('Simulation running...'):
+            df = simulate(system_parameters,
+                        total_supply=total_supply,
+                        multiplier=multiplier)
 
-        col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2)
 
-        with col1:
-            
-            df['inflation_tokens'] = df['weekly_inflation'].cumsum()
-            df['unlocked_supply'] = df['unlocked_supply'] + df[
-                'inflation_tokens']
+            with col1:
+                
+                df['inflation_tokens'] = df['weekly_inflation'].cumsum()
+                df['unlocked_supply'] = df['unlocked_supply'] + df[
+                    'inflation_tokens']
 
-            fig_area = px.area(
-                df,
-                x='date',
-                y=[
-                    entity['name']
-                    for entity in system_parameters['entities'][0]
-                ] +
-                ['inflation_tokens'
-                 ],  
-                title='Tokenomics Supply Over Time')
-            fig_area.update_layout(
-                title={
-                    'text': 'Tokenomics Supply Over Time',
-                    'x': 0.5,  
-                    'xanchor': 'center'
-                })
+                fig_area = px.area(
+                    df,
+                    x='date',
+                    y=[
+                        entity['name']
+                        for entity in system_parameters['entities'][0]
+                    ] +
+                    ['inflation_tokens'
+                    ],  
+                    title='Tokenomics Supply Over Time')
+                fig_area.update_layout(
+                    title={
+                        'text': 'Tokenomics Supply Over Time',
+                        'x': 0.5,  
+                        'xanchor': 'center'
+                    })
 
-            st.plotly_chart(fig_area, use_container_width=True)
+                st.plotly_chart(fig_area, use_container_width=True)
 
-        with col2:
+            with col2:
 
-            pie_data = pd.DataFrame(system_parameters['entities'][0])
-            fig_pie = px.pie(pie_data,
-                             values='percentage_of_total_supply',
-                             names='name',
-                             title='Percentage Distribution of Total Supply')
-            fig_pie.update_layout(
-                title={
-                    'text': 'Percentage Distribution of Total Supply',
-                    'x': 0.5,  
-                    'xanchor': 'center'
-                })
+                pie_data = pd.DataFrame(system_parameters['entities'][0])
+                fig_pie = px.pie(pie_data,
+                                values='percentage_of_total_supply',
+                                names='name',
+                                title='Percentage Distribution of Total Supply')
+                fig_pie.update_layout(
+                    title={
+                        'text': 'Percentage Distribution of Total Supply',
+                        'x': 0.5,  
+                        'xanchor': 'center'
+                    })
 
-            st.plotly_chart(fig_pie, use_container_width=True)
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-        col3, col4 = st.columns(2)
+            col3, col4 = st.columns(2)
 
-        with col3:
-            fig_line1 = px.line(
-                df,
-                x='date',
-                y=['unlocked_supply', 'total_staked'],
-                )
-            fig_line1.update_layout(
-                title={
-                    'text': 'STRK Supply Over Time - Unlocks + Inflation',
+            with col3:
+                fig_line1 = px.line(
+                    df,
+                    x='date',
+                    y=['unlocked_supply', 'total_staked'],
+                    )
+                fig_line1.update_layout(
+                    title={
+                        'text': 'STRK Supply Over Time - Unlocks + Inflation',
+                        'x': 0.5,
+                        'xanchor': 'center'
+                    },
+                    width = 600,
+                    height = 450)
+                st.plotly_chart(fig_line1)
+
+            with col4:
+                fig_line2 = px.line(df,
+                                    x='date',
+                                    y='percentage_staked',
+                                    title='Staked over time')
+                fig_line2.update_layout(title={
+                    'text': ' % Staked  over time',
                     'x': 0.5,
                     'xanchor': 'center'
-                },
-                width = 600,
-                height = 450)
-            st.plotly_chart(fig_line1)
+                })
+                st.plotly_chart(fig_line2)
 
-        with col4:
-            fig_line2 = px.line(df,
-                                x='date',
-                                y='percentage_staked',
-                                title='Staked over time')
-            fig_line2.update_layout(title={
-                'text': ' % Staked  over time',
-                'x': 0.5,
-                'xanchor': 'center'
-            })
-            st.plotly_chart(fig_line2)
+            col5, _ = st.columns(2)
 
-        col5, _ = st.columns(2)
+            with col5:
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=df['date'],
+                        y=df['annual_inflation_percent'],
+                        mode='lines',
+                        name='Annual Inflation Percent',
+                        hoverinfo='text+name',
+                        text=df.apply(lambda row:
+                                    f"Staking Rate: {row['percentage_staked']}%",
+                                    axis=1)))
 
-        with col5:
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatter(
-                    x=df['date'],
-                    y=df['annual_inflation_percent'],
-                    mode='lines',
-                    name='Annual Inflation Percent',
-                    hoverinfo='text+name',
-                    text=df.apply(lambda row:
-                                  f"Staking Rate: {row['percentage_staked']}%",
-                                  axis=1)))
+                
+                fig.update_layout(
+                    title={
+                        'text': 'Annual Inflation Percent Over Time',
+                        'x': 0.5,
+                        'xanchor': 'center'
+                    },
+                    xaxis_title='Timestep',
+                    yaxis_title='Annual Inflation %',
+                    hovermode='closest'
+                )  
 
+                
+                st.plotly_chart(fig)
             
-            fig.update_layout(
-                title={
-                    'text': 'Annual Inflation Percent Over Time',
-                    'x': 0.5,
-                    'xanchor': 'center'
-                },
-                xaxis_title='Timestep',
-                yaxis_title='Annual Inflation %',
-                hovermode='closest'
-            )  
+            st.success('Simulation completed! You can download the simulation csv below.')
 
-            
-            st.plotly_chart(fig)
+            def convert_df_to_csv(df):
+                return df.to_csv(index=False).encode('utf-8')
 
-        def convert_df_to_csv(df):
-            return df.to_csv(index=False).encode('utf-8')
-
-        csv_file = convert_df_to_csv(df)
-        st.download_button(
-            label="Download data as CSV",
-            data=csv_file,
-            file_name="simulation_data.csv",
-            mime="text/csv",
-        )
+            csv_file = convert_df_to_csv(df)
+            st.download_button(
+                label="Download data as CSV",
+                data=csv_file,
+                file_name="simulation_data.csv",
+                mime="text/csv",
+            )
