@@ -256,7 +256,7 @@ system_parameters = {
 }
 
 
-st.markdown("<h1 style='text-align: center;'>Starknet Vesting Simulator</h1>",
+st.markdown("<h1 style='text-align: center;'>Starknet Emission Simulator</h1>",
             unsafe_allow_html=True)
 
 if st.button('Generate Staking Rate'):
