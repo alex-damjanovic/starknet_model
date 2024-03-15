@@ -110,30 +110,6 @@ def simulate(system_parameters,
 
 
 st.sidebar.header('System Parameter Configuration')
-suppl_expander = st.sidebar.expander('Total Supply & TGE Date', expanded=False)
-with suppl_expander:
-    starting_date = st.date_input("Starting Date",
-                                  value=pd.to_datetime("2024-01-01"))
-total_supply = suppl_expander.number_input('Total Supply (to be vested)',
-                                           value=1_000_000_000,
-                                           step=1000)
-
-staking_expander = st.sidebar.expander('Staking Parameters', expanded=False)
-base_mu = staking_expander.number_input('Base Mu (Mean of Drift)',
-                                        value=0.05,
-                                        step=0.01)
-sigma = staking_expander.number_input(
-    'Sigma (Standard Deviation of Drift)',
-    value=0.5,
-    step=0.10,
-    help=
-    "Sigma controls the volatility of the staking percentage's change over time. A higher sigma results in more significant fluctuations."
-)
-lower_bound = staking_expander.number_input(
-    'Lower Bound of Target Percentage Staked', value=20.0, step=1.0)
-upper_bound = staking_expander.number_input(
-    'Upper Bound of Target Percentage Staked', value=60.0, step=1.0)
-
 
 inflation_parameter = st.sidebar.expander('Inflation Coefficient',
                                           expanded=False)
@@ -158,6 +134,31 @@ with inflation_parameter:
                 
     Adjusting the multiplier allows you to simulate different inflation scenarios and their impact on the token ecosystem.
     """)
+
+suppl_expander = st.sidebar.expander('Total Supply & TGE Date', expanded=False)
+with suppl_expander:
+    starting_date = st.date_input("Starting Date",
+                                  value=pd.to_datetime("2024-01-01"))
+total_supply = suppl_expander.number_input('Total Supply (to be vested)',
+                                           value=1_000_000_000,
+                                           step=1000)
+
+staking_expander = st.sidebar.expander('Staking Parameters', expanded=False)
+base_mu = staking_expander.number_input('Base Mu (Mean of Drift)',
+                                        value=0.05,
+                                        step=0.01)
+sigma = staking_expander.number_input(
+    'Sigma (Standard Deviation of Drift)',
+    value=0.5,
+    step=0.10,
+    help=
+    "Sigma controls the volatility of the staking percentage's change over time. A higher sigma results in more significant fluctuations."
+)
+lower_bound = staking_expander.number_input(
+    'Lower Bound of Target Percentage Staked', value=20.0, step=1.0)
+upper_bound = staking_expander.number_input(
+    'Upper Bound of Target Percentage Staked', value=60.0, step=1.0)
+
 
     # Validate bounds
 if lower_bound >= upper_bound:
@@ -319,10 +320,10 @@ if st.button('Run Simulation'):
                     ] +
                     ['inflation_tokens'
                     ],  
-                    title='Tokenomics Supply Over Time')
+                    title='STRK Supply Over Time')
                 fig_area.update_layout(
                     title={
-                        'text': 'Tokenomics Supply Over Time',
+                        'text': 'STRK Supply Over Time',
                         'x': 0.5,  
                         'xanchor': 'center'
                     })
@@ -335,10 +336,10 @@ if st.button('Run Simulation'):
                 fig_pie = px.pie(pie_data,
                                 values='percentage_of_total_supply',
                                 names='name',
-                                title='Percentage Distribution of Total Supply')
+                                title='Percentage Distribution of Initial Supply')
                 fig_pie.update_layout(
                     title={
-                        'text': 'Percentage Distribution of Total Supply',
+                        'text': 'Percentage Distribution of Initial Supply',
                         'x': 0.5,  
                         'xanchor': 'center'
                     })
@@ -355,7 +356,7 @@ if st.button('Run Simulation'):
                     )
                 fig_line1.update_layout(
                     title={
-                        'text': 'STRK Supply Over Time - Unlocks + Inflation',
+                        'text': 'Circulating STRK Supply Over Time',
                         'x': 0.5,
                         'xanchor': 'center'
                     },
@@ -397,7 +398,7 @@ if st.button('Run Simulation'):
                         'x': 0.5,
                         'xanchor': 'center'
                     },
-                    xaxis_title='Timestep',
+                    xaxis_title='date',
                     yaxis_title='Annual Inflation %',
                     hovermode='closest'
                 )  
