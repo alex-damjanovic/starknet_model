@@ -159,7 +159,6 @@ lower_bound = staking_expander.number_input(
 upper_bound = staking_expander.number_input(
     'Upper Bound of Target Percentage Staked', value=60.0, step=1.0)
 
-
     # Validate bounds
 if lower_bound >= upper_bound:
     st.sidebar.error(
