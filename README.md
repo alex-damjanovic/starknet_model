@@ -1,4 +1,3 @@
 # Starknet Vesting Simulator
 
-
-For testing various vesting schemas and inflation parameters.
+Customizable dashboard for testing various vesting schemas for Starknet. Work in progress. 
